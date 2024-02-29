@@ -2,6 +2,7 @@
 import sys
 import random
 from perlin_noise import PerlinNoise
+import math
 
 import pygame
 from pygame.locals import QUIT
@@ -20,6 +21,7 @@ WORLD_WIDTH = 40
 WORLD_DEPTH = 20
 NOISE_CONSTANT = 10
 PLAYER_HITBOX = pygame.Rect(380, 259, 42, 81)
+PLAYER_CENTER = (401, 299.5)
 GRAVITY = 1
 TERMINAL_VELOCITY = 16
 JUMP_HEIGHT = 20
@@ -27,6 +29,8 @@ Y_VELOCITY = JUMP_HEIGHT
 FALL_VELOCITY = 0
 jumping = False
 falling = False
+mouse_pos = (0, 0)
+selected_block = (0,0,0,0)
 
 
 # some comment I've added to test git
@@ -34,6 +38,11 @@ falling = False
 class Player:
 
     def __init__(self):
+        # More tool power equals faster mining speeds for certain blocks. Based on the tool being used
+        self.shovel_power = 1
+        self.pickaxe_power = 1
+        self.axe_power = 1
+
         self.can_move_right = True
         self.can_move_left = True
         self.can_move_up = True
@@ -130,24 +139,52 @@ player = Player()
 
 class Block:
     def __init__(self, block_type, pos):
-        self.destroyed = False
-        self.img = pygame.image.load(block_type + ".png")
+        self.location = (0,0)
+        self.breaking = 0
+        self.destroyed = True
+        if block_type != "air":
+            self.destroyed = False
+        self.block_type = block_type
+        self.img = pygame.image.load(self.block_type + ".png")
         self.img = pygame.transform.scale(self.img, (BLOCK_WIDTH_HEIGHT, BLOCK_WIDTH_HEIGHT))
         self.pos = pos
         self.draw(0, 0)
+        if block_type == "grass" or block_type == "dirt":
+            self.break_time = 100 / player.shovel_power
+        elif block_type == "stone":
+            self.break_time = 400 / player.pickaxe_power
 
     def draw(self, x_pos, y_pos):
-        if not self.destroyed:
-            location = ((self.pos["x"] * BLOCK_WIDTH_HEIGHT) - x_pos, (self.pos["y"] * BLOCK_WIDTH_HEIGHT) + SEA_LEVEL -
+        global mouse_pos, selected_block
+        self.location = ((self.pos["x"] * BLOCK_WIDTH_HEIGHT) - x_pos, (self.pos["y"] * BLOCK_WIDTH_HEIGHT) + SEA_LEVEL -
                         y_pos)
-            screen.blit(self.img, location)
-            self.rect = pygame.Rect(location[0], location[1], BLOCK_WIDTH_HEIGHT, BLOCK_WIDTH_HEIGHT)
+        if not self.destroyed:
+            screen.blit(self.img, self.location)
+            self.rect = pygame.Rect(self.location[0], self.location[1], BLOCK_WIDTH_HEIGHT, BLOCK_WIDTH_HEIGHT)
             # pygame.draw.rect(screen, 000000, self.rect, 2)
+            if self.breaking > 0:
+                self.breaking -= 1
+                if self.breaking > self.break_time * 0.8:
+                    screen.blit(pygame.image.load("break_3.png"), self.rect)
+                elif self.breaking > self.break_time * 0.6:
+                    screen.blit(pygame.image.load("break_2.png"), self.rect)
+                elif self.breaking > self.break_time * 0.4:
+                    screen.blit(pygame.image.load("break_1.png"), self.rect)
+                elif self.breaking > self.break_time * 0.2:
+                    screen.blit(pygame.image.load("break_0.png"), self.rect)
+            if self.rect.x < mouse_pos[0] < self.rect.x + BLOCK_WIDTH_HEIGHT:
+                if self.rect.y < mouse_pos[1] < self.rect.y + BLOCK_WIDTH_HEIGHT:
+                    selected_block = self.rect
         else:
-             self.rect = None
+            self.rect = None
+            air_rect = pygame.Rect(self.location[0], self.location[1], BLOCK_WIDTH_HEIGHT, BLOCK_WIDTH_HEIGHT)
+            if air_rect.x < mouse_pos[0] < air_rect.x + BLOCK_WIDTH_HEIGHT:
+                if air_rect.y < mouse_pos[1] < air_rect.y + BLOCK_WIDTH_HEIGHT:
+                    selected_block = air_rect
 
     def destroy(self):
-        if not self.destroyed:
+        self.breaking += 2
+        if self.breaking > self.break_time:
             self.img = pygame.image.load("air.png")
             self.destroyed = True
 
@@ -162,13 +199,16 @@ class Terrain:
             column = []
             dirt_thickness = random.randint(3, 4)
             for d in range(depth[w]):
-                block_height = WORLD_DEPTH - d
+                self.block_height = WORLD_DEPTH - d
                 if d - depth[w] == -1:
-                    column.append(Block("grass", {"x": w, "y": block_height}))
+                    column.append(Block("grass", {"x": w, "y": self.block_height}))
                 elif d >= depth[w] - dirt_thickness:
-                    column.append(Block("dirt", {"x": w, "y": block_height}))
-                else:
-                    column.append(Block("stone", {"x": w, "y": block_height}))
+                    column.append(Block("dirt", {"x": w, "y": self.block_height}))
+                elif WORLD_DEPTH >= d < depth[w] - dirt_thickness:
+                    column.append(Block("stone", {"x": w, "y": self.block_height}))
+            while self.block_height > -6:
+                self.block_height -= 1
+                column.append(Block("air", {"x": w, "y": self.block_height}))
             self.blocks.append(column)
 
     def draw(self, x, y):
@@ -179,7 +219,17 @@ class Terrain:
 
 class ClickHandler:
     def __init__(self):
+        self.in_range = True
         pass
+
+    def update_mouse(self):
+        global mouse_pos
+        mouse_pos = pygame.mouse.get_pos()
+        mouse_vector = math.dist(mouse_pos, PLAYER_CENTER)
+        if mouse_vector <= 250:
+            self.in_range = True
+        else:
+            self.in_range = False
 
     def check_clicks(self):
         if pygame.mouse.get_pressed()[0]:
@@ -190,14 +240,16 @@ class ClickHandler:
             return 1
 
     def left_click(self):
+        global mouse_pos
         mouse_pos = pygame.mouse.get_pos()
         for column in terrain.blocks:
             for block in column:
-                if block.rect:
-                    pygame.draw.rect(screen, (255, 255, 255), block.rect)
+                if block.rect and self.in_range:
                     if block.rect.x < mouse_pos[0] < block.rect.x + BLOCK_WIDTH_HEIGHT:
                         if block.rect.y < mouse_pos[1] < block.rect.y + BLOCK_WIDTH_HEIGHT:
                             block.destroy()
+                            return block
+        return False
 
 
 # Terrain generation shenanigans
@@ -214,7 +266,7 @@ Click_Handler = ClickHandler()
 terrain = Terrain(WORLD_WIDTH, height_map)
 
 terrain_x = 0
-terrain_y = -30
+terrain_y = -80
 
 # Game loop
 
@@ -224,6 +276,7 @@ while True:
             pygame.quit()
             sys.exit()
 
+    Click_Handler.update_mouse()
     mouse_input = Click_Handler.check_clicks()
 
     player.movement_options()
@@ -260,5 +313,7 @@ while True:
     screen.fill(bg_color)
     terrain.draw(terrain_x, terrain_y)
     player.draw()
+    if Click_Handler.in_range:
+        pygame.draw.rect(screen, (255, 255, 255), selected_block, 3)
     pygame.display.flip()
     clock.tick(60)
