@@ -11,10 +11,23 @@ pygame.init()
 bg_color = (59, 190, 237)
 screen = pygame.display.set_mode((800, 600))
 screen.fill(bg_color)
-pygame.display.set_caption('Pycraft')
+pygame.display.set_caption('PyCraft')
 clock = pygame.time.Clock()
 
 walk_frames = ["idle.png", "1.png", "2.png", "3.png", "4.png"]
+temp = []
+for item in walk_frames:
+    temp.append(pygame.image.load(item))
+walk_frames = temp
+
+
+break_frames = ["break_0.png", "break_1.png", "break_2.png", "break_3.png"]
+temp = []
+for item in break_frames:
+    temp.append(pygame.image.load(item))
+break_frames = temp
+
+
 BLOCK_WIDTH_HEIGHT = 50
 ITEM_WIDTH_HEIGHT = 25
 SEA_LEVEL = 340
@@ -39,6 +52,7 @@ stones = ["stone"]
 bg_objects = ["tallgrass", "poppy", "tulip", "cornflower"]
 wood = ["oak_log"]
 weak_blocks = ["oak_leaf"]
+show_inv = False
 
 
 # some comment I've added to test git
@@ -50,14 +64,17 @@ class Player:
         self.selected = 0
         self.i_frames = 60
 
+        self.hotbar_img = pygame.image.load("inventory_slot.png")
+        self.selected_hotbar_img = pygame.image.load("selected_slot.png")
+
         self.health_regen = 0
         self.health = 10
         self.fall_counter = 0
 
         # More tool power equals faster mining speeds for certain blocks. Based on the tool being used
-        self.shovel_power = 1
-        self.pickaxe_power = 1
-        self.axe_power = 1
+        self.shovel_power = 10
+        self.pickaxe_power = 10
+        self.axe_power = 10
 
         self.can_move_right = True
         self.can_move_left = True
@@ -67,7 +84,7 @@ class Player:
         self.tick = 5
         self.frame = 0
         self.dir = 1
-        self.img = pygame.image.load("idle.png")
+        self.img = walk_frames[0]
         self.rect = PLAYER_HITBOX
         right_edge = PLAYER_HITBOX.x + PLAYER_HITBOX.width
         self.right_sensor = pygame.Rect(right_edge, PLAYER_HITBOX.y, 20, PLAYER_HITBOX.height - 5)
@@ -93,7 +110,7 @@ class Player:
                 self.tick = 5
             else:
                 self.tick -= 1
-            self.img = pygame.image.load(walk_frames[self.frame])
+            self.img = walk_frames[self.frame]
             if self.dir == -1:
                 self.img = pygame.transform.flip(self.img, True, False)
             if keys[pygame.K_a]:
@@ -108,7 +125,7 @@ class Player:
                     return False
             return self.dir
         else:
-            self.img = pygame.image.load("idle.png")
+            self.img = walk_frames[0]
             if self.dir == -1:
                 self.img = pygame.transform.flip(self.img, True, False)
             return 0
@@ -167,15 +184,13 @@ class Player:
             self.health_regen = 0
 
     def hotbar(self, scroll):
-        hotbar_img = pygame.image.load("inventory_slot.png")
-        selected_hotbar_img = pygame.image.load("selected_slot.png")
         hotbar_pos = 20
         self.selected = (scroll + self.selected) % 9
         for i in range(9):
             if i == self.selected:
-                screen.blit(selected_hotbar_img, (hotbar_pos, 20))
+                screen.blit(self.selected_hotbar_img, (hotbar_pos, 20))
             else:
-                screen.blit(hotbar_img, (hotbar_pos, 20))
+                screen.blit(self.hotbar_img, (hotbar_pos, 20))
             hotbar_pos += 45
         item_pos = 32
         keys = self.inventory.keys()
@@ -197,6 +212,32 @@ class Player:
                 del_list.append(item)
         for item in del_list:
             del self.inventory[item]
+
+        # Draw inventory
+        if show_inv:
+            inv_x = 20
+            inv_y = 20
+            inv_width = 9
+            inv_height = 3
+            inv_num = len(self.inventory)
+            for i in range(inv_height):
+                inv_y += 75
+                for j in range(inv_width):
+                    screen.blit(self.hotbar_img, (inv_x, inv_y))
+                    item_num = (i+1) * (j+1)
+                    keys = self.inventory.keys()
+                    if keys[item_num]:
+                        key = keys[item_num]
+                        if self.inventory[key][0] <= 9:
+                            offset = 5.5
+                        else:
+                            offset = 0.5
+                        text = font.render(str(self.inventory[key][0]), True, (0, 0, 0))
+                        screen.blit(self.inventory[key][1], (inv_x + 12, inv_y + 12))
+                        screen.blit(text, (inv_x + 12 + offset, inv_y + 50))
+                    inv_x += 45
+                inv_x = 20
+
 
 
     def damage_check(self):
@@ -254,13 +295,13 @@ class Block:
             if self.breaking > 0:
                 self.breaking -= 1
                 if self.breaking > self.break_time * 0.8:
-                    screen.blit(pygame.image.load("break_3.png"), self.rect)
+                    screen.blit(break_frames[3], self.rect)
                 elif self.breaking > self.break_time * 0.6:
-                    screen.blit(pygame.image.load("break_2.png"), self.rect)
+                    screen.blit(break_frames[2], self.rect)
                 elif self.breaking > self.break_time * 0.4:
-                    screen.blit(pygame.image.load("break_1.png"), self.rect)
+                    screen.blit(break_frames[1], self.rect)
                 elif self.breaking > self.break_time * 0.2:
-                    screen.blit(pygame.image.load("break_0.png"), self.rect)
+                    screen.blit(break_frames[0], self.rect)
             if self.rect.x < mouse_pos[0] < self.rect.x + BLOCK_WIDTH_HEIGHT:
                 if self.rect.y < mouse_pos[1] < self.rect.y + BLOCK_WIDTH_HEIGHT:
                     selected_block = (self.rect, self)
@@ -278,6 +319,7 @@ class Block:
             Item(self.block_type, self.pos["x"], self.pos["y"])
             self.img = pygame.image.load(block + ".png")
             self.destroyed = True
+            self.breaking = 0
 
     def place(self, temp):
         if temp == 0:
@@ -313,6 +355,7 @@ selected_block = ((0, 0, 0, 0), Block("grass", {"x": 10000, "y": 10000}))
 class Terrain:
     def __init__(self, width, depth):
         self.blocks = []
+        tree_x = 0
         for w in range(width):
             column = []
             terrain_rand = random.randint(1, 20)
@@ -335,13 +378,16 @@ class Terrain:
                     column.append(Block("tulip", {"x": w, "y": self.block_height}))
                 elif 10 < terrain_rand <= 12:
                     column.append(Block("cornflower", {"x": w, "y": self.block_height}))
-                elif 12 < terrain_rand <= 14:
+                elif 12 < terrain_rand <= 15 and tree_x == 0:
                     column.append(Block("oak_log", {"x": w, "y": self.block_height}))
+                    tree_x = 3
                 else:
                     column.append(Block("air", {"x": w, "y": self.block_height}))
                 self.block_height -= 1
                 terrain_rand = 0
                 column.append(Block("air", {"x": w, "y": self.block_height}))
+            if tree_x > 0:
+                tree_x -= 1
             self.blocks.append(column)
         self.tree_constructor()
 
@@ -448,6 +494,8 @@ for i in range(WORLD_WIDTH):
 Click_Handler = ClickHandler()
 terrain = Terrain(WORLD_WIDTH, height_map)
 
+player.inventory["oak_planks"] = [1, pygame.image.load("oak_planks.png")]
+
 terrain_x = 0
 terrain_y = -500
 
@@ -460,6 +508,12 @@ while True:
             sys.exit()
         if event.type == pygame.MOUSEWHEEL:
             scroll = -1 * event.y
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_e]:
+        show_inv = True
+    elif keys[pygame.K_ESCAPE]:
+        show_inv = False
+
 
     Click_Handler.update_mouse()
     mouse_input = Click_Handler.check_clicks()
