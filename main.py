@@ -84,7 +84,6 @@ class Player:
         self.tick = 5
         self.frame = 0
         self.dir = 1
-        self.item_num = 0
         self.img = walk_frames[0]
         self.rect = PLAYER_HITBOX
         right_edge = PLAYER_HITBOX.x + PLAYER_HITBOX.width
@@ -184,17 +183,7 @@ class Player:
             self.health += 1
             self.health_regen = 0
 
-    def inventory_manager(self, scroll):
-        del_list = []
-        keys = []
-        for key in self.inventory.keys():
-            keys.append(key)
-            if self.inventory[key][0] <= 0:
-                del_list.append(key)
-        for item in del_list:
-            del self.inventory[item]
-
-        # Draw hotbar
+    def hotbar(self, scroll):
         hotbar_pos = 20
         self.selected = (scroll + self.selected) % 9
         for i in range(9):
@@ -202,46 +191,52 @@ class Player:
                 screen.blit(self.selected_hotbar_img, (hotbar_pos, 20))
             else:
                 screen.blit(self.hotbar_img, (hotbar_pos, 20))
-                self.item_num += 1
             hotbar_pos += 45
         item_pos = 32
-        key_count = 0
-        for key in keys:
-            key_count += 1
-            if self.inventory[key][0] <= 9:
+        keys = self.inventory.keys()
+        for item in keys:
+            if self.inventory[item][0] <= 9:
                 offset = 5.5
             else:
                 offset = 0.5
-            if key_count <= 9:
-                text = font.render(str(self.inventory[key][0]), True, (0, 0, 0))
-                screen.blit(self.inventory[key][1], (item_pos, 32))
-                screen.blit(text, (item_pos + offset, 70))
-                item_pos += 45
+            text = font.render(str(self.inventory[item][0]), True, (0, 0, 0))
+            screen.blit(self.inventory[item][1], (item_pos, 32))
+            screen.blit(text, (item_pos + offset, 70))
+            item_pos += 45
+
+    def inventory_manager(self):
+        del_list = []
+        keys = self.inventory.keys()
+        for item in keys:
+            if self.inventory[item][0] <= 0:
+                del_list.append(item)
+        for item in del_list:
+            del self.inventory[item]
 
         # Draw inventory
         if show_inv:
             inv_x = 20
-            inv_y = 95
+            inv_y = 20
             inv_width = 9
             inv_height = 3
-            num_items = len(keys)
-            count = 9
+            inv_num = len(self.inventory)
             for i in range(inv_height):
+                inv_y += 75
                 for j in range(inv_width):
                     screen.blit(self.hotbar_img, (inv_x, inv_y))
-                    if count < num_items:
-                        screen.blit(self.inventory[keys[count]][1], (inv_x + 12, inv_y + 12))
-                        text = font.render(str(self.inventory[keys[count]][0]), True, (0, 0, 0))
-                        if self.inventory[keys[count]][0] <= 9:
+                    item_num = (i+1) * (j+1)
+                    keys = self.inventory.keys()
+                    if keys[item_num]:
+                        key = keys[item_num]
+                        if self.inventory[key][0] <= 9:
                             offset = 5.5
                         else:
                             offset = 0.5
+                        text = font.render(str(self.inventory[key][0]), True, (0, 0, 0))
+                        screen.blit(self.inventory[key][1], (inv_x + 12, inv_y + 12))
                         screen.blit(text, (inv_x + 12 + offset, inv_y + 50))
                     inv_x += 45
-                    count += 1
                 inv_x = 20
-                inv_y += 75
-
 
 
 
@@ -499,21 +494,10 @@ for i in range(WORLD_WIDTH):
 Click_Handler = ClickHandler()
 terrain = Terrain(WORLD_WIDTH, height_map)
 
+player.inventory["oak_planks"] = [1, pygame.image.load("oak_planks.png")]
+
 terrain_x = 0
 terrain_y = -500
-
-player.inventory["oak_planks"] = [1, pygame.image.load("oak_planks.png")]
-"""
-player.inventory["cornflower"] = [1, pygame.image.load("cornflower.png")]
-player.inventory["grass"] = [1, pygame.image.load("grass.png")]
-player.inventory["dirt"] = [1, pygame.image.load("dirt.png")]
-player.inventory["poppy"] = [1, pygame.image.load("poppy.png")]
-player.inventory["oak_log"] = [1, pygame.image.load("oak_log.png")]
-player.inventory["oak_leaf"] = [1, pygame.image.load("oak_leaf.png")]
-player.inventory["tallgrass"] = [1, pygame.image.load("tallgrass.png")]
-player.inventory["stone"] = [1, pygame.image.load("stone.png")]
-player.inventory["tulip"] = [1, pygame.image.load("tulip.png")]
-"""
 
 # Game loop
 
@@ -570,7 +554,8 @@ while True:
     player.draw()
     player.damage_check()
     player.health_bar()
-    player.inventory_manager(scroll)
+    player.inventory_manager()
+    player.hotbar(scroll)
     scroll = 0
     if Click_Handler.in_range:
         pygame.draw.rect(screen, (255, 255, 255), selected_block[0], 3)
