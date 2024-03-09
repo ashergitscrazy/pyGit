@@ -1,13 +1,11 @@
 import sys
 import random
 
-import pygame
-from pygame.locals import QUIT
-
 from perlin_noise import PerlinNoise
 import math
 
-
+import pygame
+from pygame.locals import QUIT
 
 pygame.init()
 bg_color = (59, 190, 237)
