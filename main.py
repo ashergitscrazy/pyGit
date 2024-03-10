@@ -8,7 +8,7 @@ import pygame
 from pygame.locals import QUIT
 
 pygame.init()
-bg_color = (59, 190, 237)
+bg_color = (135, 206, 235)
 screen = pygame.display.set_mode((800, 600))
 screen.fill(bg_color)
 pygame.display.set_caption('PyCraft')
@@ -20,13 +20,11 @@ for item in walk_frames:
     temp.append(pygame.image.load(item))
 walk_frames = temp
 
-
 break_frames = ["break_0.png", "break_1.png", "break_2.png", "break_3.png"]
 temp = []
 for item in break_frames:
     temp.append(pygame.image.load(item))
 break_frames = temp
-
 
 BLOCK_WIDTH_HEIGHT = 50
 ITEM_WIDTH_HEIGHT = 25
@@ -52,6 +50,7 @@ stones = ["stone"]
 bg_objects = ["tallgrass", "poppy", "tulip", "cornflower"]
 wood = ["oak_log"]
 weak_blocks = ["oak_leaf"]
+clouds = ["cloud_0", "cloud_1", "cloud_2"]
 show_inv = False
 
 
@@ -193,6 +192,7 @@ class Player:
                 del_list.append(key)
         for item in del_list:
             del self.inventory[item]
+            keys.remove(item)
 
         # Draw hotbar
         hotbar_pos = 20
@@ -241,9 +241,6 @@ class Player:
                     count += 1
                 inv_x = 20
                 inv_y += 75
-
-
-
 
     def damage_check(self):
         if falling:
@@ -350,6 +347,7 @@ class Block:
                 self.break_time = 200 / player.axe_power
             if temp == 0:
                 player.inventory[key][0] -= 1
+
     def is_floor(self):
         return self.rect
 
@@ -407,18 +405,16 @@ class Terrain:
                     for k in range(rand):
                         if j + k < len(column) - 1:
                             if k < rand - 3:
-                                (self.blocks[i][j+k]).place("oak_log")
+                                (self.blocks[i][j + k]).place("oak_log")
                                 tree_blocks.append(self.blocks[i][j + k])
                             elif k < rand - 1:
-                                if i-1 >= 0:
-                                    (self.blocks[i-1][j + k]).place("oak_leaf")
+                                if i - 1 >= 0:
+                                    (self.blocks[i - 1][j + k]).place("oak_leaf")
                                 (self.blocks[i][j + k]).place("oak_leaf")
-                                if i+1 < len(self.blocks):
-                                    (self.blocks[i+1][j + k]).place("oak_leaf")
+                                if i + 1 < len(self.blocks):
+                                    (self.blocks[i + 1][j + k]).place("oak_leaf")
                             else:
                                 (self.blocks[i][j + k]).place("oak_leaf")
-
-
 
     def draw(self, x, y):
         for column in self.blocks:
@@ -427,6 +423,35 @@ class Terrain:
         for item in items:
             item.draw(x, y)
             item.pick_up()
+
+
+class CloudSpawner:
+    def __init__(self):
+        self.clouds = []
+        self.cloud_list = []
+        for cloud in clouds:
+            self.clouds.append(pygame.transform.scale(pygame.image.load(cloud + ".png"), (128, 64)))
+        for i in range(random.randint(6, 8)):
+            cloud_img = random.choice(self.clouds)
+            cloud_x = random.randint(-200, 800)
+            cloud_y = random.randint(0, 300)
+            cloud_speed = random.randint(2, 5) / 10
+            self.cloud_list.append([cloud_img, cloud_x, cloud_y, cloud_speed])
+
+    def draw_clouds(self):
+        for cloud in self.cloud_list:
+            screen.blit(cloud[0], (cloud[1], cloud[2]))
+            cloud[1] += cloud[3]
+            if cloud[1] > 800:
+                self.cloud_list.remove(cloud)
+                self.create_clouds()
+
+    def create_clouds(self):
+        cloud_img = random.choice(self.clouds)
+        cloud_x = -140
+        cloud_y = random.randint(0, 300)
+        cloud_speed = random.randint(2, 5) / 10
+        self.cloud_list.append([cloud_img, cloud_x, cloud_y, cloud_speed])
 
 
 class Item:
@@ -498,22 +523,10 @@ for i in range(WORLD_WIDTH):
 
 Click_Handler = ClickHandler()
 terrain = Terrain(WORLD_WIDTH, height_map)
+clouds = CloudSpawner()
 
 terrain_x = 0
 terrain_y = -500
-
-player.inventory["oak_planks"] = [1, pygame.image.load("oak_planks.png")]
-"""
-player.inventory["cornflower"] = [1, pygame.image.load("cornflower.png")]
-player.inventory["grass"] = [1, pygame.image.load("grass.png")]
-player.inventory["dirt"] = [1, pygame.image.load("dirt.png")]
-player.inventory["poppy"] = [1, pygame.image.load("poppy.png")]
-player.inventory["oak_log"] = [1, pygame.image.load("oak_log.png")]
-player.inventory["oak_leaf"] = [1, pygame.image.load("oak_leaf.png")]
-player.inventory["tallgrass"] = [1, pygame.image.load("tallgrass.png")]
-player.inventory["stone"] = [1, pygame.image.load("stone.png")]
-player.inventory["tulip"] = [1, pygame.image.load("tulip.png")]
-"""
 
 # Game loop
 
@@ -529,7 +542,6 @@ while True:
         show_inv = True
     elif keys[pygame.K_ESCAPE]:
         show_inv = False
-
 
     Click_Handler.update_mouse()
     mouse_input = Click_Handler.check_clicks()
@@ -566,6 +578,7 @@ while True:
     if move_dir:
         terrain_x += 10 * move_dir
     screen.fill(bg_color)
+    clouds.draw_clouds()
     terrain.draw(terrain_x, terrain_y)
     player.draw()
     player.damage_check()
