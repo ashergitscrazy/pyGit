@@ -20,3 +20,5 @@ https://www.spriters-resource.com/custom_edited/minecraftcustoms/sheet/85390/
 3-4-2024: Added background objects like flowers and grass, added tree generation
 
 3-5-2024: Lag reduction
+
+3-11-2024: Added world border and bedrock

@@ -32,7 +32,7 @@ SEA_LEVEL = 340
 WORLD_WIDTH = 40
 WORLD_DEPTH = 20
 NOISE_CONSTANT = 10
-PLAYER_HITBOX = pygame.Rect(380, 259, 42, 81)
+PLAYER_HITBOX = pygame.Rect(388, 259, 32, 81)
 PLAYER_CENTER = (401, 299.5)
 GRAVITY = 1
 TERMINAL_VELOCITY = 16
@@ -50,6 +50,7 @@ stones = ["stone"]
 bg_objects = ["tallgrass", "poppy", "tulip", "cornflower"]
 wood = ["oak_log"]
 weak_blocks = ["oak_leaf"]
+unbreakable = ["bedrock", "border"]
 clouds = ["cloud_0", "cloud_1", "cloud_2"]
 show_inv = False
 
@@ -65,15 +66,19 @@ class Player:
 
         self.hotbar_img = pygame.image.load("inventory_slot.png")
         self.selected_hotbar_img = pygame.image.load("selected_slot.png")
+        self.small_crafting_img = pygame.image.load("2x2 crafting.png")
+        self.large_crafting_img = pygame.image.load("3x3 crafting.png")
+        self.output_slot_img = pygame.image.load("output_slot.png")
+        self.crafting_arrow_img = pygame.image.load("crafting_arrow.png")
 
         self.health_regen = 0
         self.health = 10
         self.fall_counter = 0
 
         # More tool power equals faster mining speeds for certain blocks. Based on the tool being used
-        self.shovel_power = 10
-        self.pickaxe_power = 10
-        self.axe_power = 10
+        self.shovel_power = 1
+        self.pickaxe_power = 1
+        self.axe_power = 1
 
         self.can_move_right = True
         self.can_move_left = True
@@ -223,7 +228,7 @@ class Player:
             inv_x = 20
             inv_y = 95
             inv_width = 9
-            inv_height = 3
+            inv_height = 2
             num_items = len(keys)
             count = 9
             for i in range(inv_height):
@@ -241,6 +246,12 @@ class Player:
                     count += 1
                 inv_x = 20
                 inv_y += 75
+
+            screen.blit(self.small_crafting_img, (450, 50))
+            screen.blit(self.crafting_arrow_img, (625, 119))
+            screen.blit(self.output_slot_img, (630, 50))
+            text = font.render("Crafting Menu", True, (0, 0, 0))
+            screen.blit(text, (550, 215))
 
     def damage_check(self):
         if falling:
@@ -284,6 +295,8 @@ class Block:
             self.break_time = 10
         elif block_type in wood:
             self.break_time = 200 / player.axe_power
+        elif block_type in unbreakable:
+            self.break_time = 10**10
 
     def draw(self, x_pos, y_pos):
         global mouse_pos, selected_block
@@ -345,6 +358,8 @@ class Block:
                 self.break_time = 10
             elif self.block_type in wood:
                 self.break_time = 200 / player.axe_power
+            elif self.block_type in unbreakable:
+                self.break_time = 10**10
             if temp == 0:
                 player.inventory[key][0] -= 1
 
@@ -361,36 +376,42 @@ class Terrain:
         tree_x = 0
         for w in range(width):
             column = []
-            terrain_rand = random.randint(1, 20)
-            dirt_thickness = random.randint(3, 4)
-            for d in range(depth[w]):
-                self.block_height = WORLD_DEPTH - d
-                if d - depth[w] == -1:
-                    column.append(Block("grass", {"x": w, "y": self.block_height}))
-                elif d >= depth[w] - dirt_thickness:
-                    column.append(Block("dirt", {"x": w, "y": self.block_height}))
-                elif WORLD_DEPTH >= d < depth[w] - dirt_thickness:
-                    column.append(Block("stone", {"x": w, "y": self.block_height}))
-            while self.block_height > -15:
-                self.block_height -= 1
-                if 0 < terrain_rand <= 6:
-                    column.append(Block("tallgrass", {"x": w, "y": self.block_height}))
-                elif 6 < terrain_rand <= 8:
-                    column.append(Block("poppy", {"x": w, "y": self.block_height}))
-                elif 8 < terrain_rand <= 10:
-                    column.append(Block("tulip", {"x": w, "y": self.block_height}))
-                elif 10 < terrain_rand <= 12:
-                    column.append(Block("cornflower", {"x": w, "y": self.block_height}))
-                elif 12 < terrain_rand <= 15 and tree_x == 0:
-                    column.append(Block("oak_log", {"x": w, "y": self.block_height}))
-                    tree_x = 3
-                else:
+            if w == 0 or w == width - 1:
+                for i in range(-30, 30):
+                    column.append(Block("border", {"x": w, "y": i}))
+            else:
+                terrain_rand = random.randint(1, 20)
+                dirt_thickness = random.randint(3, 4)
+                for d in range(depth[w]):
+                    self.block_height = WORLD_DEPTH - d
+                    if d - depth[w] == -1:
+                        column.append(Block("grass", {"x": w, "y": self.block_height}))
+                    elif d == 0:
+                        column.append(Block("bedrock", {"x": w, "y": self.block_height}))
+                    elif d >= depth[w] - dirt_thickness:
+                        column.append(Block("dirt", {"x": w, "y": self.block_height}))
+                    elif WORLD_DEPTH >= d < depth[w] - dirt_thickness:
+                        column.append(Block("stone", {"x": w, "y": self.block_height}))
+                while self.block_height > -15:
+                    self.block_height -= 1
+                    if 0 < terrain_rand <= 6:
+                        column.append(Block("tallgrass", {"x": w, "y": self.block_height}))
+                    elif 6 < terrain_rand <= 8:
+                        column.append(Block("poppy", {"x": w, "y": self.block_height}))
+                    elif 8 < terrain_rand <= 10:
+                        column.append(Block("tulip", {"x": w, "y": self.block_height}))
+                    elif 10 < terrain_rand <= 12:
+                        column.append(Block("cornflower", {"x": w, "y": self.block_height}))
+                    elif 12 < terrain_rand <= 15 and tree_x == 0:
+                        column.append(Block("oak_log", {"x": w, "y": self.block_height}))
+                        tree_x = 3
+                    else:
+                        column.append(Block("air", {"x": w, "y": self.block_height}))
+                    self.block_height -= 1
+                    terrain_rand = 0
                     column.append(Block("air", {"x": w, "y": self.block_height}))
-                self.block_height -= 1
-                terrain_rand = 0
-                column.append(Block("air", {"x": w, "y": self.block_height}))
-            if tree_x > 0:
-                tree_x -= 1
+                if tree_x > 0:
+                    tree_x -= 1
             self.blocks.append(column)
         self.tree_constructor()
 
