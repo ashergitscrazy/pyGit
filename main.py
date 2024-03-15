@@ -4,6 +4,8 @@ import random
 from perlin_noise import PerlinNoise
 import math
 
+from PIL import Image, ImageEnhance
+
 import pygame
 from pygame.locals import QUIT
 
@@ -29,9 +31,10 @@ break_frames = temp
 BLOCK_WIDTH_HEIGHT = 50
 ITEM_WIDTH_HEIGHT = 25
 SEA_LEVEL = 340
-WORLD_WIDTH = 40
+WORLD_WIDTH = 100
 WORLD_DEPTH = 20
-NOISE_CONSTANT = 10
+NOISE_CONSTANT = 15
+BUILD_HEIGHT = 20
 PLAYER_HITBOX = pygame.Rect(388, 259, 32, 81)
 PLAYER_CENTER = (401, 299.5)
 GRAVITY = 1
@@ -47,12 +50,14 @@ font = pygame.font.Font("MinecraftRegular-Bmg3.otf", 24)
 scroll = 0
 sediments = ["dirt", "grass"]
 stones = ["stone"]
-bg_objects = ["tallgrass", "poppy", "tulip", "cornflower"]
+plants = ["tallgrass", "poppy", "tulip", "cornflower"]
 wood = ["oak_log"]
 weak_blocks = ["oak_leaf"]
 unbreakable = ["bedrock", "border"]
 clouds = ["cloud_0", "cloud_1", "cloud_2"]
 show_inv = False
+bg_layer = False
+darken_filter = pygame.image.load("darken_filter.png")
 
 
 # some comment I've added to test git
@@ -143,7 +148,7 @@ class Player:
             for column in terrain.blocks:
                 for block in column:
                     if (not block.destroyed and block.rect.colliderect(floor_finder) and block.block_type not in
-                            bg_objects):
+                            plants) and not block.is_bg:
                         floor = block.is_floor()
                         return floor
             finder_depth += 50
@@ -158,7 +163,7 @@ class Player:
         self.can_move_right = True
         for column in terrain.blocks:
             for block in column:
-                if not block.destroyed and block.block_type not in bg_objects:
+                if not block.destroyed and block.block_type not in plants and not block.is_bg:
                     if block.rect.colliderect(self.left_sensor):
                         self.can_move_left = False
                         self.l_col = (0, 0, 0)
@@ -277,6 +282,10 @@ player = Player()
 
 class Block:
     def __init__(self, block_type, pos):
+        global bg_layer
+        self.is_bg = bg_layer
+        if block_type in plants:
+            self.is_bg = False
         self.location = (0, 0)
         self.breaking = 0
         self.destroyed = True
@@ -291,12 +300,12 @@ class Block:
             self.break_time = 100 / player.shovel_power
         elif block_type in stones:
             self.break_time = 400 / player.pickaxe_power
-        elif block_type in bg_objects or block_type in weak_blocks:
+        elif block_type in plants or block_type in weak_blocks:
             self.break_time = 10
         elif block_type in wood:
             self.break_time = 200 / player.axe_power
         elif block_type in unbreakable:
-            self.break_time = 10**10
+            self.break_time = 10 ** 10
 
     def draw(self, x_pos, y_pos):
         global mouse_pos, selected_block
@@ -320,6 +329,9 @@ class Block:
             if self.rect.x < mouse_pos[0] < self.rect.x + BLOCK_WIDTH_HEIGHT:
                 if self.rect.y < mouse_pos[1] < self.rect.y + BLOCK_WIDTH_HEIGHT:
                     selected_block = (self.rect, self)
+            if self.is_bg:
+                pygame.Surface.set_alpha(darken_filter, 75)
+                screen.blit(darken_filter, self.rect)
         else:
             self.rect = None
             self.air_rect = pygame.Rect(self.location[0], self.location[1], BLOCK_WIDTH_HEIGHT, BLOCK_WIDTH_HEIGHT)
@@ -337,6 +349,12 @@ class Block:
             self.breaking = 0
 
     def place(self, temp):
+        if bg_layer:
+            self.is_bg = True
+        else:
+            self.is_bg = False
+        if self.block_type in plants:
+            self.is_bg = False
         if temp == 0:
             try:
                 key = list(player.inventory.keys())[player.selected]
@@ -354,12 +372,12 @@ class Block:
                 self.break_time = 100 / player.shovel_power
             elif self.block_type in stones:
                 self.break_time = 400 / player.pickaxe_power
-            elif self.block_type in bg_objects or self.block_type in weak_blocks:
+            elif self.block_type in plants or self.block_type in weak_blocks:
                 self.break_time = 10
             elif self.block_type in wood:
                 self.break_time = 200 / player.axe_power
             elif self.block_type in unbreakable:
-                self.break_time = 10**10
+                self.break_time = 10 ** 10
             if temp == 0:
                 player.inventory[key][0] -= 1
 
@@ -372,6 +390,7 @@ selected_block = ((0, 0, 0, 0), Block("grass", {"x": 10000, "y": 10000}))
 
 class Terrain:
     def __init__(self, width, depth):
+        global bg_layer
         self.blocks = []
         tree_x = 0
         for w in range(width):
@@ -392,7 +411,7 @@ class Terrain:
                         column.append(Block("dirt", {"x": w, "y": self.block_height}))
                     elif WORLD_DEPTH >= d < depth[w] - dirt_thickness:
                         column.append(Block("stone", {"x": w, "y": self.block_height}))
-                while self.block_height > -15:
+                while self.block_height > -1 * BUILD_HEIGHT:
                     self.block_height -= 1
                     if 0 < terrain_rand <= 6:
                         column.append(Block("tallgrass", {"x": w, "y": self.block_height}))
@@ -403,7 +422,9 @@ class Terrain:
                     elif 10 < terrain_rand <= 12:
                         column.append(Block("cornflower", {"x": w, "y": self.block_height}))
                     elif 12 < terrain_rand <= 15 and tree_x == 0:
+                        bg_layer = True
                         column.append(Block("oak_log", {"x": w, "y": self.block_height}))
+                        bg_layer = False
                         tree_x = 3
                     else:
                         column.append(Block("air", {"x": w, "y": self.block_height}))
@@ -416,6 +437,7 @@ class Terrain:
         self.tree_constructor()
 
     def tree_constructor(self):
+        global bg_layer
         tree_blocks = []
         for i in range(len(self.blocks)):
             column = self.blocks[i]
@@ -423,6 +445,7 @@ class Terrain:
                 block = column[j]
                 if block.block_type == "oak_log" and block not in tree_blocks:
                     rand = random.randint(4, 7)
+                    bg_layer = True
                     for k in range(rand):
                         if j + k < len(column) - 1:
                             if k < rand - 3:
@@ -436,6 +459,7 @@ class Terrain:
                                     (self.blocks[i + 1][j + k]).place("oak_leaf")
                             else:
                                 (self.blocks[i][j + k]).place("oak_leaf")
+                    bg_layer = False
 
     def draw(self, x, y):
         for column in self.blocks:
@@ -549,6 +573,7 @@ clouds = CloudSpawner()
 terrain_x = 0
 terrain_y = -500
 
+select_color = (255, 255, 255)
 # Game loop
 
 while True:
@@ -563,6 +588,12 @@ while True:
         show_inv = True
     elif keys[pygame.K_ESCAPE]:
         show_inv = False
+    elif keys[pygame.K_UP]:
+        bg_layer = False
+        select_color = (255, 255, 255)
+    elif keys[pygame.K_DOWN]:
+        bg_layer = True
+        select_color = (0, 0, 180)
 
     Click_Handler.update_mouse()
     mouse_input = Click_Handler.check_clicks()
@@ -607,7 +638,7 @@ while True:
     player.inventory_manager(scroll)
     scroll = 0
     if Click_Handler.in_range:
-        pygame.draw.rect(screen, (255, 255, 255), selected_block[0], 3)
+        pygame.draw.rect(screen, select_color, selected_block[0], 3)
     pygame.display.flip()
 
     clock.tick(60)
